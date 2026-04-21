@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JARVIS</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --accent: #00c8ff;
+    --accent2: #ff4d4d;
+    --bg: #050a0f;
+    --bg2: #0a1520;
+    --bg3: #0f1e2e;
+    --border: rgba(0,200,255,0.18);
+    --border2: rgba(0,200,255,0.35);
+    --text: #c8e8ff;
+    --muted: rgba(200,232,255,0.45);
+    --green: #00ff88;
+    --amber: #ffb300;
+  }
+  html, body { width:100%; height:100%; background:var(--bg); color:var(--text); font-family:'Rajdhani',sans-serif; overflow:hidden; }
+  body::before {
+    content:''; position:fixed; inset:0;
+    background:repeating-linear-gradient(to bottom,transparent,transparent 2px,rgba(0,0,0,0.07) 2px,rgba(0,0,0,0.07) 4px);
+    pointer-events:none; z-index:999;
+  }
+  #hud {
+    display:grid;
+    grid-template-rows:56px 1fr 90px;
+    grid-template-columns:220px 1fr 220px;
+    height:100vh; padding:12px; gap:10px;
+  }
+  .topbar {
+    grid-column:1/-1; display:flex; align-items:center;
+    justify-content:space-between; border:1px solid var(--border);
+    background:var(--bg2); padding:0 20px;
+    clip-path:polygon(0 0,calc(100% - 16px) 0,100% 100%,0 100%);
+  }
+  .logo { font-size:22px; font-weight:700; letter-spacing:0.3em; color:var(--accent); text-transform:uppercase; text-shadow:0 0 16px rgba(0,200,255,0.5); }
+  .logo span { color:var(--text); font-weight:300; }
+  .status-bar { display:flex; align-items:center; gap:24px; font-family:'Share Tech Mono',monospace; font-size:12px; color:var(--muted); }
+  .status-dot { width:7px; height:7px; border-radius:50%; background:var(--green); box-shadow:0 0 8px var(--green); animation:pulse-dot 2s infinite; display:inline-block; margin-right:6px; }
+  .status-dot.offline { background:#555; box-shadow:none; animation:none; }
+  @keyframes pulse-dot { 0%,100%{opacity:1}50%{opacity:0.3} }
+  #clock { font-family:'Share Tech Mono',monospace; font-size:13px; color:var(--accent); letter-spacing:0.1em; }
+  .panel { background:var(--bg2); border:1px solid var(--border); padding:14px; position:relative; overflow:hidden; }
+  .panel::before { content:''; position:absolute; top:0; left:0; right:0; height:1px; background:linear-gradient(90deg,transparent,var(--accent),transparent); opacity:0.5; }
+  .panel-label { font-family:'Share Tech Mono',monospace; font-size:10px; letter-spacing:0.2em; color:var(--accent); text-transform:uppercase; margin-bottom:12px; opacity:0.7; }
+  .left-panel { grid-row:2; grid-column:1; display:flex; flex-direction:column; gap:12px; }
+  .stat-header { display:flex; justify-content:space-between; font-size:12px; margin-bottom:5px; color:var(--muted); }
+  .stat-header .val { color:var(--accent); font-family:'Share Tech Mono',monospace; }
+  .bar-track { width:100%; height:4px; background:rgba(0,200,255,0.1); border-radius:2px; overflow:hidden; }
+  .bar-fill { height:100%; background:linear-gradient(90deg,var(--accent),rgba(0,200,255,0.5)); border-radius:2px; transition:width 0.8s cubic-bezier(0.4,0,0.2,1); width:0%; }
+  .bar-fill.warn { background:linear-gradient(90deg,var(--amber),rgba(255,179,0,0.5)); }
+  .bar-fill.danger { background:linear-gradient(90deg,var(--accent2),rgba(255,77,77,0.5)); }
+  .battery-block { margin-top:4px; font-size:12px; color:var(--muted); display:flex; align-items:center; gap:8px; }
+  .center-panel { grid-row:2; grid-column:2; display:flex; flex-direction:column; overflow:hidden; }
+  #chat-log { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:10px; padding-right:4px; }
+  #chat-log::-webkit-scrollbar{width:3px} #chat-log::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+  .msg { padding:10px 14px; font-size:14px; line-height:1.5; max-width:92%; animation:msg-in 0.3s ease; }
+  @keyframes msg-in { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+  .msg.user { align-self:flex-end; background:rgba(0,200,255,0.08); border:1px solid var(--border2); border-right:3px solid var(--accent); }
+  .msg.jarvis{ align-self:flex-start; background:rgba(0,255,136,0.05); border:1px solid rgba(0,255,136,0.2); border-left:3px solid var(--green); }
+  .msg.system{ align-self:flex-start; background:rgba(255,179,0,0.05); border:1px solid rgba(255,179,0,0.2); border-left:3px solid var(--amber); font-family:'Share Tech Mono',monospace; font-size:12px; }
+  .msg.error { align-self:flex-start; background:rgba(255,77,77,0.06); border:1px solid rgba(255,77,77,0.2); border-left:3px solid var(--accent2); font-size:13px; }
+  .msg-tag { font-size:10px; letter-spacing:0.15em; margin-bottom:4px; opacity:0.5; font-family:'Share Tech Mono',monospace; }
+  .right-panel { grid-row:2; grid-column:3; display:flex; flex-direction:column; overflow:hidden; }
+  .intel-entry {
+    background:rgba(0,200,255,0.03); border-left:2px solid var(--border2);
+    padding:6px 10px; animation:msg-in 0.2s ease; font-family:'Share Tech Mono',monospace;
+  }
+  .intel-entry.warn { border-left-color:var(--amber); background:rgba(255,179,0,0.04); }
+  .intel-entry.error { border-left-color:var(--accent2); background:rgba(255,77,77,0.04); }
+  .intel-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:2px; }
+  .intel-action { font-size:10px; letter-spacing:0.15em; color:var(--accent); text-transform:uppercase; }
+  .intel-entry.warn .intel-action { color:var(--amber); }
+  .intel-entry.error .intel-action { color:var(--accent2); }
+  .intel-time { font-size:9px; color:var(--muted); opacity:0.6; }
+  .intel-detail { font-size:11px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .bottombar { grid-column:1/-1; display:flex; align-items:center; gap:10px; background:var(--bg2); border:1px solid var(--border); padding:0 16px; }
+  #text-input { flex:1; background:transparent; border:none; outline:none; color:var(--text); font-family:'Share Tech Mono',monospace; font-size:14px; caret-color:var(--accent); }
+  #text-input::placeholder { color:var(--muted); }
+  .btn { padding:8px 18px; background:transparent; border:1px solid var(--border2); color:var(--accent); font-family:'Rajdhani',sans-serif; font-size:13px; font-weight:600; letter-spacing:0.12em; text-transform:uppercase; cursor:pointer; transition:background 0.15s; clip-path:polygon(6px 0,100% 0,calc(100% - 6px) 100%,0 100%); white-space:nowrap; }
+  .btn:hover { background:rgba(0,200,255,0.12); border-color:var(--accent); }
+  .btn.danger { color:var(--accent2); border-color:rgba(255,77,77,0.4); }
+  .btn.danger:hover { background:rgba(255,77,77,0.1); border-color:var(--accent2); }
+  #status-text { font-family:'Share Tech Mono',monospace; font-size:11px; color:var(--muted); letter-spacing:0.15em; text-transform:uppercase; min-width:90px; }
+  .vu-wrap { display:flex; align-items:flex-end; gap:3px; height:28px; padding:4px 0; }
+  .vu-bar { width:4px; background:var(--accent); border-radius:2px; opacity:0.3; min-height:3px; }
+  .vu-bar.active { opacity:1; animation:vu-b 0.5s infinite alternate; }
+  .vu-bar.active:nth-child(2){animation-delay:.1s}.vu-bar.active:nth-child(3){animation-delay:.2s}.vu-bar.active:nth-child(4){animation-delay:.15s}.vu-bar.active:nth-child(5){animation-delay:.05s}
+  @keyframes vu-b { from{height:4px} to{height:20px} }
+  .corner-deco { position:absolute; width:12px; height:12px; border-color:var(--accent); border-style:solid; opacity:0.5; }
+  .corner-deco.tl{top:6px;left:6px;border-width:1px 0 0 1px}.corner-deco.tr{top:6px;right:6px;border-width:1px 1px 0 0}.corner-deco.bl{bottom:6px;left:6px;border-width:0 0 1px 1px}.corner-deco.br{bottom:6px;right:6px;border-width:0 1px 1px 0}
+  #mic-btn.active {
+    background:rgba(255,77,77,0.15);
+    border-color:var(--accent2);
+    color:var(--accent2);
+    animation:pulse-ring 1s infinite;
+  }
+  @keyframes pulse-ring {
+    0%,100%{box-shadow:0 0 0 0 rgba(255,77,77,0.4)}
+    50%{box-shadow:0 0 0 8px rgba(255,77,77,0)}
+  }
+  @keyframes wake-flash { 0%{box-shadow:0 0 0 0 rgba(0,200,255,0)} 30%{box-shadow:0 0 32px 8px rgba(0,200,255,0.25)} 100%{box-shadow:0 0 0 0 rgba(0,200,255,0)} }
+  .wake-flash { animation:wake-flash 0.6s ease-out; }
+  #settings-overlay {
+    display:none; position:fixed; inset:0; z-index:800;
+    background:rgba(5,10,15,0.85); backdrop-filter:blur(4px);
+    align-items:center; justify-content:center;
+  }
+  #settings-overlay.open { display:flex; }
+  .settings-box {
+    width:480px; background:var(--bg2); border:1px solid var(--border2);
+    padding:32px; position:relative;
+  }
+  .settings-box::before,.settings-box::after{content:'';position:absolute;width:14px;height:14px;border-color:var(--accent);border-style:solid;opacity:0.6;}
+  .settings-box::before{top:8px;left:8px;border-width:1px 0 0 1px;}
+  .settings-box::after{bottom:8px;right:8px;border-width:0 1px 1px 0;}
+  .settings-title { font-size:18px; font-weight:700; letter-spacing:0.2em; color:var(--accent); text-transform:uppercase; margin-bottom:24px; }
+  .settings-section { margin-bottom:20px; }
+  .settings-label { font-family:'Share Tech Mono',monospace; font-size:10px; letter-spacing:0.2em; color:var(--accent); text-transform:uppercase; margin-bottom:8px; opacity:0.7; }
+  .settings-select {
+    width:100%; background:rgba(0,200,255,0.04); border:1px solid var(--border2);
+    color:var(--text); font-family:'Share Tech Mono',monospace; font-size:12px;
+    padding:9px 12px; outline:none; cursor:pointer;
+  }
+  .settings-select:focus { border-color:var(--accent); }
+  .settings-select option { background:var(--bg2); color:var(--text); }
+  .settings-row { display:flex; gap:10px; align-items:center; margin-top:8px; }
+  .settings-slider { flex:1; accent-color:var(--accent); cursor:pointer; }
+  .settings-val { font-family:'Share Tech Mono',monospace; font-size:11px; color:var(--accent); min-width:36px; text-align:right; }
+  .settings-close { position:absolute; top:12px; right:12px; background:none; border:none; color:var(--muted); font-size:18px; cursor:pointer; line-height:1; }
+  .settings-close:hover { color:var(--accent2); }
+  .settings-btn { padding:9px 20px; background:rgba(0,200,255,0.08); border:1px solid var(--border2); color:var(--accent); font-family:'Rajdhani',sans-serif; font-size:13px; font-weight:600; letter-spacing:0.12em; text-transform:uppercase; cursor:pointer; transition:background 0.15s; }
+  .settings-btn:hover { background:rgba(0,200,255,0.18); }
+</style>
+</head>
+<body>
+
+<div id="hud">
+  <div class="topbar">
+    <div class="logo">JAR<span>VIS</span></div>
+    <div class="status-bar">
+      <span><span class="status-dot" id="conn-dot"></span><span id="conn-text">CONNECTING</span></span>
+      <span id="status-text">STANDBY</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:16px;">
+      <button class="btn danger" style="clip-path:none;padding:5px 12px;font-size:11px;" onclick="resetKey()">RESET KEY</button>
+      <button class="btn" style="clip-path:none;padding:5px 12px;font-size:11px;" onclick="openSettings()">⚙ SETTINGS</button>
+      <div id="clock">--:--:--</div>
+    </div>
+  </div>
+
+  <div class="panel left-panel">
+    <div class="corner-deco tl"></div><div class="corner-deco br"></div>
+    <div class="panel-label">// system monitor</div>
+    <div class="stat-block">
+      <div class="stat-header"><span>CPU</span><span class="val" id="cpu-val">--%</span></div>
+      <div class="bar-track"><div class="bar-fill" id="cpu-bar"></div></div>
+    </div>
+    <div class="stat-block">
+      <div class="stat-header"><span>RAM</span><span class="val" id="ram-val">--%</span></div>
+      <div class="bar-track"><div class="bar-fill" id="ram-bar"></div></div>
+    </div>
+    <div class="stat-block">
+      <div class="stat-header"><span>DISK</span><span class="val" id="disk-val">--%</span></div>
+      <div class="bar-track"><div class="bar-fill" id="disk-bar"></div></div>
+    </div>
+    <div class="battery-block" id="battery-block" style="display:none;">
+      <span id="batt-icon">⚡</span><span id="batt-text">--</span>
+    </div>
+    <div style="margin-top:auto;padding-top:12px;">
+      <div class="panel-label">// quick actions</div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <button class="btn" style="width:100%;clip-path:none;" onclick="sendCmd('What is my system status?')">SYS INFO</button>
+        <button class="btn" style="width:100%;clip-path:none;" onclick="send({action:'get_sysinfo'})">REFRESH</button>
+        <button class="btn danger" style="width:100%;clip-path:none;" onclick="send({action:'clear_history'})">CLEAR LOG</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel center-panel" id="center-panel">
+    <div class="corner-deco tl"></div><div class="corner-deco tr"></div>
+    <div class="corner-deco bl"></div><div class="corner-deco br"></div>
+    <div class="panel-label">// conversation log</div>
+    <div id="chat-log">
+      <div class="msg system">
+        <div class="msg-tag">SYSTEM</div>
+        JARVIS ready. Say "jarvis" to activate, or type below.
+      </div>
+    </div>
+  </div>
+
+  <div class="panel right-panel">
+    <div class="corner-deco tr"></div><div class="corner-deco bl"></div>
+    <div class="panel-label">// intel feed</div>
+    <div id="intel-feed" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">
+      <div style="color:var(--muted);font-size:11px;font-family:'Share Tech Mono',monospace;text-align:center;margin-top:20px;opacity:0.5;">AWAITING ACTIVITY</div>
+    </div>
+  </div>
+
+  <div class="bottombar">
+    <button class="btn" id="mic-btn" onclick="toggleMic()" title="Hold to speak" style="clip-path:none;border-radius:50%;width:42px;height:42px;padding:0;font-size:18px;flex-shrink:0;">🎤</button>
+    <div class="vu-wrap" id="vu">
+      <div class="vu-bar" style="height:6px;"></div>
+      <div class="vu-bar" style="height:10px;"></div>
+      <div class="vu-bar" style="height:14px;"></div>
+      <div class="vu-bar" style="height:8px;"></div>
+      <div class="vu-bar" style="height:5px;"></div>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;gap:4px;justify-content:center;">
+      <div id="interim-text" style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--accent);letter-spacing:0.05em;min-height:14px;opacity:0.6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
+      <input type="text" id="text-input" placeholder='Type a command... or say "jarvis"' autocomplete="off" />
+    </div>
+    <button class="btn" onclick="sendText()">EXECUTE</button>
+    <span id="status-text-bottom" style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;min-width:80px;"></span>
+  </div>
+</div>
+
+<script>
+const WS_URL = 'ws://localhost:8765';
+let ws = null;
+let reconnectAttempts = 0;
+const maxReconnects = 12;
+let hudReady = true;
+
+function updateClock() {
+  const now = new Date();
+  const el = document.getElementById('clock');
+  if (el) el.textContent = now.toLocaleTimeString('en-GB', {hour12:false});
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+function connectWebSocket() {
+  ws = new WebSocket(WS_URL);
+  ws.onopen = () => {
+    console.log("%c[WS] Connected", "color:lime");
+    reconnectAttempts = 0;
+    document.getElementById('conn-text').textContent = 'ONLINE';
+    document.getElementById('conn-dot').classList.remove('offline');
+  };
+  ws.onclose = () => {
+    document.getElementById('conn-text').textContent = 'RECONNECTING';
+    if (reconnectAttempts < maxReconnects) {
+      reconnectAttempts++;
+      setTimeout(connectWebSocket, 700 * reconnectAttempts);
+    }
+  };
+  ws.onerror = (e) => console.error(e);
+  ws.onmessage = (e) => handleMsg(JSON.parse(e.data));
+}
+
+function send(obj) {
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
+}
+
+function handleMsg(msg) {
+  switch (msg.type) {
+    case 'transcript':
+      // Final transcript — clear interim display and show as user message
+      setInterim('');
+      appendMsg('user', msg.text);
+      break;
+    case 'interim_transcript':
+      // Realtime partial — show live in the bottom bar as you speak
+      setInterim(msg.text);
+      break;
+    case 'response':
+      appendMsg('jarvis', msg.text, msg.source);
+      if (msg.results) addSearchResults(msg.results);
+      break;
+    case 'status': updateStatus(msg.value); break;
+    case 'sysinfo': updateSysInfo(msg.data); break;
+    case 'wake': flashWake(); break;
+    case 'intel': addIntelLog(msg); break;
+    case 'init': onInit(msg); break;
+    case 'voices': populateVoiceSelect(msg.data); break;
+    case 'files': showFilesInIntel(msg.data); break;
+    case 'shell_result': showShellResult(msg.data); break;
+    case 'file_content': showFileContent(msg.data); break;
+    case 'error': appendMsg('error', msg.text); break;
+  }
+}
+
+// Show realtime interim STT text in bottom bar
+function setInterim(text) {
+  const el = document.getElementById('interim-text');
+  if (!el) return;
+  el.textContent = text ? '▸ ' + text : '';
+  // Animate the VU bars while there's interim text (mic is active)
+  document.querySelectorAll('.vu-bar').forEach(b =>
+    b.classList.toggle('active', text.length > 0)
+  );
+}
+
+// Called on WS init — populate voice dropdown
+function onInit(msg) {
+  if (msg.voices) populateVoiceSelect(msg.voices);
+}
+
+function populateVoiceSelect(voices) {
+  const sel = document.getElementById('voice-select');
+  if (!sel || !voices.length) return;
+  sel.innerHTML = '';
+  voices.forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v.id;
+    opt.textContent = `[${v.id}] ${v.name}`;
+    sel.appendChild(opt);
+  });
+  sel.onchange = () => send({ action: 'set_voice', index: parseInt(sel.value) });
+}
+
+function openSettings() {
+  document.getElementById('settings-overlay').classList.add('open');
+  send({ action: 'list_voices' });
+  // Refresh mic list in case devices changed since boot
+  populateMicDevices();
+}
+
+function previewVoice() {
+  const idx = parseInt(document.getElementById('voice-select').value);
+  if (!isNaN(idx)) send({ action: 'text_command', text: `Say: JARVIS online. Voice ${idx} active.` });
+}
+
+function addSearchResults(results) {
+  if (!results || !results.length) return;
+  const log = document.getElementById('chat-log');
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;flex-direction:column;gap:4px;max-width:92%;';
+  results.slice(0, 3).forEach(r => {
+    const el = document.createElement('div');
+    el.style.cssText = 'background:rgba(0,200,255,0.04);border:1px solid var(--border);padding:8px 12px;font-size:12px;';
+    el.innerHTML = `<div style="color:var(--accent);font-family:\'Share Tech Mono\',monospace;font-size:10px;letter-spacing:0.1em;margin-bottom:4px;">${esc(r.title||'')}</div>`
+      + `<div style="color:var(--muted);line-height:1.4;">${esc(r.snippet||'')}</div>`
+      + (r.url ? `<div style="color:var(--green);font-family:\'Share Tech Mono\',monospace;font-size:9px;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(r.url)}</div>` : '');
+    wrap.appendChild(el);
+  });
+  log.appendChild(wrap);
+  log.scrollTop = log.scrollHeight;
+}
+
+function showFilesInIntel(data) {
+  if (!data) return;
+  const files = Array.isArray(data) ? data : [data];
+  const feed = document.getElementById('intel-feed');
+  if (feed.children.length === 1 && feed.textContent.includes('AWAITING')) feed.innerHTML = '';
+  files.forEach(f => {
+    const el = document.createElement('div');
+    el.className = 'intel-entry';
+    el.innerHTML = `<div class="intel-header"><span class="intel-action">FILE</span></div>`
+      + `<div class="intel-detail">${esc(typeof f === 'string' ? f : JSON.stringify(f))}</div>`;
+    feed.appendChild(el);
+  });
+  feed.scrollTop = feed.scrollHeight;
+}
+
+function showShellResult(data) {
+  appendMsg('system', typeof data === 'string' ? data : JSON.stringify(data, null, 2));
+}
+
+function showFileContent(data) {
+  appendMsg('system', typeof data === 'string' ? data : JSON.stringify(data, null, 2));
+}
+
+function appendMsg(type, text, source) {
+  const log = document.getElementById('chat-log');
+  const div = document.createElement('div');
+  div.className = `msg ${type}`;
+  const tags = {user:'YOU', jarvis: source==='search'?'JARVIS · WEB':source==='system'?'JARVIS · SYS':'JARVIS · AI', system:'SYSTEM', error:'ERROR'};
+  div.innerHTML = `<div class="msg-tag">${tags[type]||type.toUpperCase()}</div>${esc(text)}`;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+}
+function esc(t) { return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function updateStatus(val) {
+  const map = {wake_listen:'WAKE WORD', listening:'LISTENING', processing:'PROCESSING', thinking:'THINKING', searching:'SEARCHING'};
+  const label = map[val] || val.toUpperCase();
+  document.getElementById('status-text').textContent = label;
+  document.getElementById('status-text-bottom').textContent = label;
+  document.querySelectorAll('.vu-bar').forEach(b => b.classList.toggle('active', val === 'listening'));
+}
+
+function updateSysInfo(d) {
+  setBar('cpu', d.cpu_percent); document.getElementById('cpu-val').textContent = d.cpu_percent + '%';
+  setBar('ram', d.ram_percent); document.getElementById('ram-val').textContent = d.ram_percent + '%';
+  setBar('disk', d.disk_percent); document.getElementById('disk-val').textContent = d.disk_percent + '%';
+  if (d.battery_percent !== null) {
+    document.getElementById('battery-block').style.display = 'flex';
+    document.getElementById('batt-icon').textContent = d.battery_plugged ? '⚡' : '🔋';
+    document.getElementById('batt-text').textContent = `BATTERY ${d.battery_percent}%`;
+  }
+}
+function setBar(id, pct) {
+  const f = document.getElementById(id+'-bar');
+  f.style.width = pct + '%';
+  f.className = 'bar-fill' + (pct >= 90 ? ' danger' : pct >= 70 ? ' warn' : '');
+}
+
+function addIntelLog(msg) {
+  const feed = document.getElementById('intel-feed');
+  if (feed.children.length === 1 && feed.textContent.includes('AWAITING')) feed.innerHTML = '';
+  const el = document.createElement('div');
+  el.className = 'intel-entry';
+  el.innerHTML = `
+    <div class="intel-header">
+      <span class="intel-action">${msg.action || 'LOG'}</span>
+      <span class="intel-time">${msg.time || ''}</span>
+    </div>
+    <div class="intel-detail">${msg.detail || ''}</div>`;
+  feed.appendChild(el);
+  feed.scrollTop = feed.scrollHeight;
+}
+
+function flashWake() {
+  const panel = document.getElementById('center-panel');
+  panel.classList.remove('wake-flash');
+  void panel.offsetWidth;
+  panel.classList.add('wake-flash');
+}
+
+function sendText() {
+  const inp = document.getElementById('text-input');
+  const t = inp.value.trim();
+  if (t) { sendCmd(t); inp.value = ''; }
+}
+function sendCmd(text) { send({action: 'text_command', text}); }
+document.getElementById('text-input').addEventListener('keydown', e => { if (e.key === 'Enter') sendText(); });
+
+function resetKey() {
+  if (confirm('Reset Groq API key?')) send({action: 'reset_key'});
+}
+
+// ── Microphone system ──────────────────────────────────────────────────────
+// Strategy for pywebview (no persistent permission storage):
+//   1. Request getUserMedia ONCE on page load — keeps permission alive for session
+//   2. Keep that MediaStream alive in `activeStream` the whole time
+//   3. Web Speech API reuses the already-granted stream so no re-prompt
+//   4. Mic device selection: release old stream, re-request with chosen deviceId
+//      then restart recognition on the new stream
+
+let recognition = null;
+let micActive = false;
+let activeStream = null;       // kept alive to hold mic permission
+let selectedDeviceId = '';     // '' = default
+
+// Called once at boot — grabs mic permission immediately so pywebview
+// doesn't ask again when the user actually clicks the mic button
+async function initMicPermission() {
+  try {
+    const constraints = { audio: selectedDeviceId ? { deviceId: { exact: selectedDeviceId } } : true };
+    activeStream = await navigator.mediaDevices.getUserMedia(constraints);
+    console.log('[MIC] Permission granted, stream held open');
+    await populateMicDevices();
+  } catch (err) {
+    console.warn('[MIC] Permission denied or no mic:', err.name);
+    appendMsg('system', `Mic unavailable: ${err.message}`);
+  }
+}
+
+// Fill the mic dropdown in settings with real device names
+async function populateMicDevices() {
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const inputs = devices.filter(d => d.kind === 'audioinput');
+    const sel = document.getElementById('mic-select');
+    sel.innerHTML = '<option value="">Default</option>';
+    inputs.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d.deviceId;
+      opt.textContent = d.label || `Microphone ${sel.options.length}`;
+      if (d.deviceId === selectedDeviceId) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  } catch (e) {
+    console.warn('[MIC] Could not enumerate devices:', e);
+  }
+}
+
+// Called when user picks a different mic in settings
+async function changeMicDevice(deviceId) {
+  selectedDeviceId = deviceId;
+  const wasActive = micActive;
+
+  // Stop current recognition first
+  if (micActive) stopMic();
+
+  // Release old stream
+  if (activeStream) {
+    activeStream.getTracks().forEach(t => t.stop());
+    activeStream = null;
+  }
+
+  // Re-request with new deviceId — this is the one and only re-prompt
+  try {
+    const constraints = { audio: deviceId ? { deviceId: { exact: deviceId } } : true };
+    activeStream = await navigator.mediaDevices.getUserMedia(constraints);
+    console.log('[MIC] Switched device, new stream held');
+    // Resume listening if it was active before
+    if (wasActive) startMic();
+  } catch (err) {
+    appendMsg('error', `Could not switch mic: ${err.message}`);
+  }
+}
+
+function toggleMic() {
+  if (micActive) stopMic();
+  else startMic();
+}
+
+function startMic() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    appendMsg('error', 'Speech recognition not supported. Use Chrome or Edge based pywebview.');
+    return;
+  }
+  if (!activeStream) {
+    // Permission not yet granted — request it now then start
+    initMicPermission().then(() => { if (activeStream) startMic(); });
+    return;
+  }
+
+  micActive = true;
+  document.getElementById('mic-btn').classList.add('active');
+  document.querySelectorAll('.vu-bar').forEach(b => b.classList.add('active'));
+  setInterim('Listening...');
+
+  recognition = new SpeechRecognition();
+  recognition.lang = 'en-US';
+  recognition.interimResults = true;
+  recognition.continuous = false;
+  recognition.maxAlternatives = 1;
+
+  recognition.onresult = (event) => {
+    let interim = '', final = '';
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const t = event.results[i][0].transcript;
+      if (event.results[i].isFinal) final += t;
+      else interim += t;
+    }
+    if (interim) setInterim(interim);
+    if (final.trim()) {
+      setInterim('');
+      sendCmd(final.trim());
+    }
+  };
+
+  recognition.onerror = (e) => {
+    if (e.error === 'no-speech') { setInterim('Listening...'); return; }
+    if (e.error === 'not-allowed') { appendMsg('error', 'Mic permission denied.'); stopMic(); return; }
+    if (e.error === 'audio-capture') { appendMsg('error', 'No microphone found.'); stopMic(); return; }
+    if (e.error !== 'aborted') console.error('[MIC]', e.error);
+  };
+
+  recognition.onend = () => {
+    if (micActive) {
+      // Keep alive — restart on silence timeout
+      try { recognition.start(); setInterim('Listening...'); }
+      catch (err) { console.warn('[MIC restart]', err); stopMic(); }
+    }
+  };
+
+  recognition.start();
+}
+
+function stopMic() {
+  micActive = false;
+  document.getElementById('mic-btn').classList.remove('active');
+  document.querySelectorAll('.vu-bar').forEach(b => b.classList.remove('active'));
+  setInterim('');
+  if (recognition) {
+    try { recognition.stop(); } catch (_) {}
+    recognition = null;
+  }
+}
+
+// Boot
+window.onload = () => {
+  // Grab mic permission immediately on load — this is the ONLY prompt
+  // pywebview will show for the whole session
+  initMicPermission();
+  setTimeout(connectWebSocket, 1200);
+};
+</script>
+
+<!-- SETTINGS MODAL -->
+<div id="settings-overlay">
+  <div class="settings-box">
+    <button class="settings-close" onclick="document.getElementById('settings-overlay').classList.remove('open')">✕</button>
+    <div class="settings-title">// Settings</div>
+    <div class="settings-section">
+      <div class="settings-label">Microphone Input</div>
+      <select class="settings-select" id="mic-select" onchange="changeMicDevice(this.value)">
+        <option value="">Default</option>
+      </select>
+      <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);margin-top:6px;opacity:0.6;">
+        Switching mic re-requests permission once for the new device.
+      </div>
+    </div>
+    <div class="settings-section">
+      <div class="settings-label">TTS Voice</div>
+      <select class="settings-select" id="voice-select" onchange="send({action:'set_voice',index:parseInt(this.value)})">
+        <option value="">Loading...</option>
+      </select>
+      <button class="settings-btn" style="margin-top:8px;" onclick="previewVoice()">▶ PREVIEW VOICE</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
