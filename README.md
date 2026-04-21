@@ -19,6 +19,9 @@ jarvis/
 
 ## Setup
 
+> [!IMPORTANT]
+> Add your Groq API key in backend/api.txt (you can get one for free).
+
 ### 1. Install Python deps
 ```bash
 pip install -r requirements.txt
